@@ -43,7 +43,7 @@ def list_assistants():
         print("No assistants available.")
     else:
         for i, assistant in enumerate(response.data, 1):
-            print(f"{i}. 🤖 {assistant.name}  (id:{assistant.id})")
+            print(f"- 🤖 {assistant.name}  (id:{assistant.id})")
 
 
 def create_thread():
@@ -84,7 +84,7 @@ def list_threads():
             if thread_ids:
                 print("Stored thread IDs:")
                 for i, tid in enumerate(thread_ids, 1):
-                    print(f"{i}. {tid}")
+                    print(f"- {tid}")
             else:
                 print("No thread IDs stored.")
     else:
@@ -93,7 +93,7 @@ def list_threads():
 
 def delete_thread(thread_id):
     """
-    Deletes a specified thread given its thread ID.
+    Deletes a specified thread given its thread ID and removes its ID from the local cache.
     The function prints a success message if the thread is deleted successfully,
     or an error message if there is a problem during deletion.
 
@@ -104,11 +104,27 @@ def delete_thread(thread_id):
         return
 
     print(f"Deleting thread {thread_id}...")
-    response = client.beta.threads.delete(thread_id)
-    if response.deleted:
-        print("Thread deleted successfully!")
-    else:
-        print("There was a problem.")
+    try:
+        response = client.beta.threads.delete(thread_id)
+        if response.deleted:
+            print("Thread deleted successfully!")
+
+            # Update the local cache file
+            user_defaults = get_user_defaults_file_path()
+            if os.path.exists(user_defaults):
+                with open(user_defaults, 'r') as file:
+                    data = json.load(file)
+                    thread_ids = data.get('thread_ids', [])
+
+                if thread_id in thread_ids:
+                    thread_ids.remove(thread_id)
+
+                    with open(user_defaults, 'w') as file:
+                        json.dump({'thread_ids': thread_ids}, file)
+        else:
+            print(f"There was a problem deleting thread id:{thread_id}")
+    except Exception as e:
+        print(f"Error deleting thread: {e}")
 
 
 def list_messages(thread_id):
@@ -133,7 +149,7 @@ def list_messages(thread_id):
         print("This thread has no messages.")
     else:
         for i, message in enumerate(response.data, 1):
-            print(f"\n{i}. {message.id} - {message.role}\n\"{message.content.value}\"")
+            print(f"\n- {message.id} - {message.role}\n\"{message.content.value}\"")
 
 
 def list_files():
@@ -149,7 +165,7 @@ def list_files():
         print("No files available.")
     else:
         for i, file in enumerate(response.data, 1):
-            print(f"{i}. {file.filename} - {file.id}")
+            print(f"- {file.filename} - {file.id}")
 
 
 def upload_file(file_path):
@@ -213,9 +229,15 @@ def delete_file(file_id=None):
             return
 
     # Code to delete a file
-    response = client.files.delete(file_id)
-    print(f"{file_id}: {response.deleted}")
-    return
+    try:
+        print(f"Deleting file {file_id}...")
+        response = client.files.delete(file_id)
+        if response.deleted:
+            print(f"File {file_id} deleted successfully.")
+        else:
+            print(f"Failed to delete file {file_id}.")
+    except Exception as e:
+        print(f"An error occurred while deleting the file: {e}")
 
 
 def styled_input(prompt, style="\033[1m", end_style="\033[0m"):
