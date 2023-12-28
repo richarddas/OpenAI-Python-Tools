@@ -4,6 +4,8 @@
 
 import os
 import sys
+import appdirs
+import json
 import openai
 from dotenv import load_dotenv
 
@@ -16,6 +18,13 @@ openai_api_key = os.getenv('OPENAI_API_KEY')
 # Retrieve and set the OpenAI API key from environment variables
 openai_api_key = os.getenv('OPENAI_API_KEY')
 client = openai.Client(api_key=openai_api_key)
+
+
+# Function to get the data file path
+def get_user_defaults_file_path():
+    user_defaults_path = appdirs.user_data_dir('Cleverbit OpenAI API Tools', 'Cleverbit')
+    os.makedirs(user_defaults_path, exist_ok=True)
+    return os.path.join(user_defaults_path, 'thread_ids.json')
 
 
 def list_assistants():
@@ -40,12 +49,47 @@ def list_assistants():
 def create_thread():
     """
     Creates a new thread using the OpenAI API.
+    Stores the ID of the created thread in a local file.
     Prints the ID of the created thread upon successful creation.
     """
     print("Creating a thread...")
     response = client.beta.threads.create()
-    print(f"Created a thread! id:{response.id}")
+    thread_id = response.id
+    print(f"Created a thread! id:{thread_id}")
     
+    # Store the thread ID in a file
+    user_defaults = get_user_defaults_file_path()
+    if os.path.exists(user_defaults):
+        with open(user_defaults, 'r') as file:
+            data = json.load(file)
+            thread_ids = data.get('thread_ids', [])
+    else:
+        thread_ids = []
+
+    thread_ids.append(thread_id)
+
+    with open(user_defaults, 'w') as file:
+        json.dump({'thread_ids': thread_ids}, file)
+
+
+def list_threads():
+    """
+    Lists all stored thread IDs.
+    """
+    user_defaults = get_user_defaults_file_path()
+    if os.path.exists(user_defaults):
+        with open(user_defaults, 'r') as file:
+            data = json.load(file)
+            thread_ids = data.get('thread_ids', [])
+            if thread_ids:
+                print("Stored thread IDs:")
+                for i, tid in enumerate(thread_ids, 1):
+                    print(f"{i}. {tid}")
+            else:
+                print("No thread IDs stored.")
+    else:
+        print("No thread IDs stored.")
+
 
 def delete_thread(thread_id):
     """
@@ -191,15 +235,16 @@ def styled_input(prompt, style="\033[1m", end_style="\033[0m"):
 
 menu_structure = [
     ("🤖 Assistants", None),
-    ("List all Assistants", list_assistants),
+    ("List Assistants", list_assistants),
 
     ("🧵 Threads", None),
+    ("List Threads", list_threads),
     ("Create a Thread", create_thread),
     ("Delete a Thread", lambda: delete_thread(input("Enter the thread ID to delete: ").strip())),
     ("List Messages For Thread", lambda: list_messages(input("Enter the thread ID: ").strip())),
 
     ("📄 Files", None),
-    ("List all Files", list_files),
+    ("List Files", list_files),
     ("Upload a File", lambda: upload_file(input("Enter the RELATIVE path of the file to upload: "))),
     ("Delete a File", lambda: delete_file(input("Enter the file ID to delete: ").strip() or None)),
 ]
@@ -215,7 +260,7 @@ def display_menu():
     for user selection. This ensures alignment between the displayed menu and 
     corresponding functions in menu_functions.
     """
-    print("\033[1mMenu Options:\033[0m")
+    print("\n\033[1mOpenAI API Tools:\033[0m")
     for text, func in menu_structure:
         if func:
             print(f"   {menu_functions.index(func) + 1}. {text}")
@@ -233,7 +278,7 @@ def run():
 
         if first_run:
             display_menu()
-            choice = styled_input("Enter your choice, or 'exit' to quit: ")
+            choice = styled_input("\nEnter your choice, or 'exit' to quit: ")
             first_run = False
         else :
             choice = styled_input("Enter your choice (or type 'menu' to see options, 'exit' to quit):")
